@@ -101,30 +101,36 @@ def run_engine(request, transcript) -> dict:
     if not settings.anthropic_api_key:
         return _fallback(request, transcript, threshold)
 
-    # Imported lazily so the app boots without the package configured.
-    from anthropic import Anthropic
+    # A failing live engine (bad key, wrong model, network) must never crash the
+    # request — degrade to the heuristic fallback so the chat always proceeds.
+    try:
+        # Imported lazily so the app boots without the package configured.
+        from anthropic import Anthropic
 
-    client = Anthropic(api_key=settings.anthropic_api_key)
-    system = SYSTEM.replace("{threshold}", str(threshold))
-    resp = client.messages.create(
-        model=settings.forge_model,
-        max_tokens=2000,
-        system=system,
-        messages=[{"role": "user", "content": _build_messages(request, transcript)}],
-    )
-    data = _extract_json(resp.content[0].text)
+        client = Anthropic(api_key=settings.anthropic_api_key)
+        system = SYSTEM.replace("{threshold}", str(threshold))
+        resp = client.messages.create(
+            model=settings.forge_model,
+            max_tokens=2000,
+            system=system,
+            messages=[{"role": "user", "content": _build_messages(request, transcript)}],
+        )
+        data = _extract_json(resp.content[0].text)
 
-    readiness = int(data.get("readiness_score", 0))
-    priority = int(data.get("priority_score", 50))
-    dev_prompt = data.get("dev_prompt") or None
-    if readiness < threshold:
-        dev_prompt = None  # never expose a prompt below the bar
-    return {
-        "reply": data.get("reply", ""),
-        "readiness_score": max(0, min(100, readiness)),
-        "priority_score": max(0, min(100, priority)),
-        "dev_prompt": dev_prompt,
-    }
+        readiness = int(data.get("readiness_score", 0))
+        priority = int(data.get("priority_score", 50))
+        dev_prompt = data.get("dev_prompt") or None
+        if readiness < threshold:
+            dev_prompt = None  # never expose a prompt below the bar
+        return {
+            "reply": data.get("reply", ""),
+            "readiness_score": max(0, min(100, readiness)),
+            "priority_score": max(0, min(100, priority)),
+            "dev_prompt": dev_prompt,
+        }
+    except Exception as exc:  # noqa: BLE001 — log and degrade, don't 500
+        print(f"[engine] live call failed, using fallback: {exc!r}")
+        return _fallback(request, transcript, threshold)
 
 
 # --- Heuristic fallback (no API key) ---------------------------------------

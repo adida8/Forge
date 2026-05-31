@@ -4,13 +4,17 @@ export default function IntakeForm({ onCreate, onClose }) {
   const [title, setTitle] = useState("");
   const [rawIdea, setRawIdea] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function submit(e) {
     e.preventDefault();
     if (!title.trim() || !rawIdea.trim()) return;
     setBusy(true);
+    setError("");
     try {
       await onCreate({ title, raw_idea: rawIdea, created_by: "Adi" });
+    } catch (err) {
+      setError(err.message || "Could not start refining. Try again.");
     } finally {
       setBusy(false);
     }
@@ -35,6 +39,7 @@ export default function IntakeForm({ onCreate, onClose }) {
             onChange={(e) => setRawIdea(e.target.value)}
             placeholder="Drop the rough idea. The Forge will interrogate the gaps."
           />
+          {error && <div className="error">{error}</div>}
           <div className="modal-actions">
             <button type="button" onClick={onClose}>Cancel</button>
             <button type="submit" className="primary" disabled={busy}>
