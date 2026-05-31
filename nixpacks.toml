@@ -1,0 +1,21 @@
+# Tells Railway/Nixpacks how to build this monorepo. The Python backend and the
+# React frontend live in subfolders, so language auto-detection doesn't fire —
+# we declare the toolchain and phases ourselves.
+
+[phases.setup]
+nixPkgs = ["python311", "nodejs_20"]
+
+[phases.install]
+cmds = [
+  "python3 -m venv /opt/venv",
+  "/opt/venv/bin/pip install --upgrade pip",
+  "/opt/venv/bin/pip install -r backend/requirements.txt",
+  "cd frontend && npm install",
+]
+
+[phases.build]
+cmds = ["cd frontend && npm run build"]
+
+# Absolute path to the venv binary so it works regardless of runtime PATH.
+[start]
+cmd = "cd backend && /opt/venv/bin/uvicorn app.main:app --host 0.0.0.0 --port $PORT"
